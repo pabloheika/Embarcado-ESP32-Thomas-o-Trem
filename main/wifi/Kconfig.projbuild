@@ -1,0 +1,15 @@
+menu "Carrinho WiFi"
+
+    config CARRINHO_WIFI_SSID
+        string "WiFi SSID"
+        default ""
+        help
+            SSID da rede WiFi (modo estacao). Defina via idf.py menuconfig.
+
+    config CARRINHO_WIFI_PASSWORD
+        string "WiFi Password"
+        default ""
+        help
+            Senha da rede WiFi.
+
+endmenu

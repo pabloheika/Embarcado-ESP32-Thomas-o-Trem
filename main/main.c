@@ -1,15 +1,20 @@
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_log.h"
 
-static const char *TAG = "contador";
+#include "web_api.h"
+#include "wifi.h"
+
+static const char *TAG = "main";
 
 void app_main(void)
 {
-    while (1) {
-        for (int i = 1; i <= 10; i++) {
-            ESP_LOGI(TAG, "%d", i);
-            vTaskDelay(pdMS_TO_TICKS(1000));
-        }
-    }
+    ESP_LOGI(TAG, "Inicializando carrinho (WiFi + HTTP)...");
+
+    ESP_ERROR_CHECK(wifi_station_init());
+    ESP_ERROR_CHECK(wifi_station_wait_connected(pdMS_TO_TICKS(120000)));
+
+    ESP_ERROR_CHECK(web_api_start());
+
+    ESP_LOGI(TAG, "Pronto. Use GET /api/telemetry e POST /api/command no IP acima.");
 }
