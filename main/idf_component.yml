@@ -1,0 +1,3 @@
+## Dependencias geridas (ESP-IDF 6: cJSON nao vem no core).
+dependencies:
+  espressif/cjson: "^1.7.19"
