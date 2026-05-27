@@ -20,6 +20,7 @@
 *.log
 
 # Build artifacts and directories
+.cache/
 **/build/
 build/
 *.o
