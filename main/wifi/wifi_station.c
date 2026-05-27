@@ -1,5 +1,6 @@
 #include "wifi_station.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "esp_check.h"
@@ -25,7 +26,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         ESP_LOGW(TAG, "Desconectado; tentando reconectar...");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         const ip_event_got_ip_t *ev = (const ip_event_got_ip_t *)event_data;
-        ESP_LOGI(TAG, "IP obtido: " IPSTR, IP2STR(&ev->ip_info.ip));
+        ESP_LOGI(TAG, "WiFi conectado — IP: " IPSTR, IP2STR(&ev->ip_info.ip));
+        ESP_LOGI(TAG, "  GET  http://" IPSTR "/api/telemetry", IP2STR(&ev->ip_info.ip));
+        ESP_LOGI(TAG, "  POST http://" IPSTR "/api/command", IP2STR(&ev->ip_info.ip));
         xEventGroupSetBits(s_wifi_event_group, WIFI_STATION_CONNECTED_BIT);
     }
 }
@@ -88,5 +91,23 @@ esp_err_t wifi_station_wait_connected(TickType_t timeout_ticks)
         ESP_LOGE(TAG, "Timeout aguardando IP (STA).");
         return ESP_ERR_TIMEOUT;
     }
+    return ESP_OK;
+}
+
+esp_err_t wifi_station_get_ip(char *buf, size_t buf_len)
+{
+    if (buf == NULL || buf_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    esp_netif_ip_info_t ip_info;
+    ESP_RETURN_ON_ERROR(esp_netif_get_ip_info(netif, &ip_info), TAG, "esp_netif_get_ip_info");
+
+    snprintf(buf, buf_len, IPSTR, IP2STR(&ip_info.ip));
     return ESP_OK;
 }
