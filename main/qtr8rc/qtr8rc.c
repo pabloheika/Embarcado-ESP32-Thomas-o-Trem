@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_timer.h"
+#include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -17,7 +18,7 @@ static const char *TAG = "qtr8rc";
  * Não use GPIO34/35/36/39 (somente entrada; não “carregam” o RC).
  * GPIO 21 e 22 estão reservados ao I2C do MPU6050 neste projeto; o IR do QTR não pode ser 22.
  */
-#define QTR_IR_PIN GPIO_NUM_18
+#define QTR_IR_PIN GPIO_NUM_5
 
 static const gpio_num_t s_qtr_pins[QTR8RC_NUM_SENSORS] = {
     GPIO_NUM_13,  // D1
@@ -319,4 +320,9 @@ esp_err_t qtr8rc_get_last_reading(qtr8rc_reading_t *out)
     *out = s_last_reading;
     xSemaphoreGive(s_reading_mutex);
     return ESP_OK;
+}
+
+bool qtr8rc_is_calibrated(void)
+{
+    return s_calibrated;
 }
