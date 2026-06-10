@@ -128,7 +128,7 @@ void app_main(void)
     // 5. Motores
     sys_log(SYS_LOG_INFO, TAG, "Iniciando Motores...");
     ESP_ERROR_CHECK(motor_driver_init());
-    motor_start_current_monitor();
+    // motor_start_current_monitor(); // <-- DESATIVADO TEMPORARIAMENTE
     
     // 6. Gerenciador de modos
     sys_log(SYS_LOG_INFO, TAG, "Iniciando Mode Manager...");
