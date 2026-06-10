@@ -27,7 +27,7 @@ static const gpio_num_t s_qtr_pins[QTR8RC_NUM_SENSORS] = {
     GPIO_NUM_26,  // D4
     GPIO_NUM_25,  // D5
     GPIO_NUM_33,  // D6
-    GPIO_NUM_32,  // D7
+    GPIO_NUM_15,  // D7 (Alterado de 32 para evitar conflito com PIN_ENABLE do motor)
     GPIO_NUM_23,  // D8
 };
 
