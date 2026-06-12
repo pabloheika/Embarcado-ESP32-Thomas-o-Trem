@@ -15,6 +15,7 @@ static const char *TAG = "qtr8rc";
 
 /*
  * Pinos — adapte ao hardware.
+ * O IR está no GPIO 5. O pino 15 foi usado como o 8º sensor (D7).
  * Não use GPIO34/35/36/39 (somente entrada; não “carregam” o RC).
  * GPIO 21 e 22 estão reservados ao I2C do MPU6050 neste projeto; o IR do QTR não pode ser 22.
  */
@@ -31,7 +32,7 @@ static const gpio_num_t s_qtr_pins[QTR8RC_NUM_SENSORS] = {
     GPIO_NUM_23,  // D8
 };
 
-#define QTR_TIMEOUT_US 30000
+#define QTR_TIMEOUT_US 3000
 
 #define QTR8RC_READ_STACK_WORDS 4096
 #define QTR8RC_READ_TASK_PRIO 5
