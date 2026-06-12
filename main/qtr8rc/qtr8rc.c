@@ -15,24 +15,39 @@ static const char *TAG = "qtr8rc";
 
 /*
  * Pinos — adapte ao hardware.
- * O IR está no GPIO 5. O pino 15 foi usado como o 8º sensor (D7).
- * Não use GPIO34/35/36/39 (somente entrada; não “carregam” o RC).
- * GPIO 21 e 22 estão reservados ao I2C do MPU6050 neste projeto; o IR do QTR não pode ser 22.
+ *
+ * IR:       GPIO 5  (controla LEDs infravermelhos do módulo QTR-8RC)
+ * Sensores: GPIO 15, 33, 25, 26, 27, 14, 13, 23  (D1..D8)
+ *
+ * Restrições observadas:
+ *   - GPIO 34/35/36/39: somente entrada, não servem para leitura RC.
+ *   - GPIO 21/22: reservados ao I2C do MPU6050.
+ *   - GPIO 32: reservado ao PIN_ENABLE dos drivers BTS7960.
+ *   - GPIO 12: strapping pin com pull-down (usado pelo enable dos motores).
  */
 #define QTR_IR_PIN GPIO_NUM_5
 
 static const gpio_num_t s_qtr_pins[QTR8RC_NUM_SENSORS] = {
-    GPIO_NUM_13,  // D1
-    GPIO_NUM_14,  // D2
-    GPIO_NUM_27,  // D3
+    GPIO_NUM_15,  // D1
+    GPIO_NUM_33,  // D2
+    GPIO_NUM_25,  // D3
     GPIO_NUM_26,  // D4
-    GPIO_NUM_25,  // D5
-    GPIO_NUM_33,  // D6
-    GPIO_NUM_15,  // D7 (Alterado de 32 para evitar conflito com PIN_ENABLE do motor)
+    GPIO_NUM_27,  // D5
+    GPIO_NUM_14,  // D6
+    GPIO_NUM_13,  // D7
     GPIO_NUM_23,  // D8
 };
 
+/*
+ * Timeout máximo de leitura em microssegundos.
+ * Reduzido para 3000 us para evitar bloqueios excessivos de CPU e
+ * inanição do watchdog. Leituras capacitivas de superfícies pretas
+ * tipicamente ocorrem entre 2000 us e 3000 us.
+ */
 #define QTR_TIMEOUT_US 3000
+
+/* Tempo para carregar o capacitor interno do circuito RC (us). */
+#define QTR_CHARGE_TIME_US 10
 
 #define QTR8RC_READ_STACK_WORDS 4096
 #define QTR8RC_READ_TASK_PRIO 5
@@ -45,6 +60,9 @@ static bool s_calibrated = false;
 static uint16_t s_black_threshold = 600;
 static int s_min_black_sensors = 1;
 
+/* Mutex para acesso exclusivo ao hardware GPIO durante leitura RC. */
+static SemaphoreHandle_t s_hardware_mutex;
+/* Mutex para acesso thread-safe à última leitura consolidada. */
 static SemaphoreHandle_t s_reading_mutex;
 static qtr8rc_reading_t s_last_reading;
 static TaskHandle_t s_read_task = NULL;
@@ -55,24 +73,49 @@ static void qtr_ir_on(void)
     gpio_set_level(QTR_IR_PIN, 1);
 }
 
+/*
+ * Leitura bruta dos 8 sensores QTR-8RC (thread-safe via hardware mutex).
+ *
+ * Etapa 1: Carrega os capacitores internos colocando GPIOs como saída HIGH.
+ * Etapa 2: Muda para entrada (floating) e mede o tempo de descarga.
+ *
+ * Superfícies brancas refletem mais IR → descarga rápida (tempo menor).
+ * Superfícies pretas absorvem IR → descarga lenta (tempo maior / timeout).
+ */
 static void qtr_read_raw_impl(uint32_t values[QTR8RC_NUM_SENSORS])
 {
+    if (xSemaphoreTake(s_hardware_mutex, portMAX_DELAY) != pdTRUE) {
+        for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
+            values[i] = QTR_TIMEOUT_US;
+        }
+        return;
+    }
+
+    /* Pré-inicializar com timeout (caso algum sensor não responda). */
+    for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
+        values[i] = QTR_TIMEOUT_US;
+    }
+
+    /* Etapa 1: Carregar capacitores (GPIO como saída em HIGH). */
     for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
         gpio_set_direction(s_qtr_pins[i], GPIO_MODE_OUTPUT);
         gpio_set_level(s_qtr_pins[i], 1);
     }
 
-    esp_rom_delay_us(10);
+    esp_rom_delay_us(QTR_CHARGE_TIME_US);
+
+    /* Etapa 2: Mudar para entrada flutuante e cronometrar descarga. */
+    int64_t start = esp_timer_get_time();
 
     for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
         gpio_set_direction(s_qtr_pins[i], GPIO_MODE_INPUT);
-        values[i] = QTR_TIMEOUT_US;
+        gpio_set_pull_mode(s_qtr_pins[i], GPIO_FLOATING);
     }
 
-    int64_t start = esp_timer_get_time();
-    uint8_t still_high_mask = 0xFF;
+    bool finished[QTR8RC_NUM_SENSORS] = { false };
+    int finished_count = 0;
 
-    while (still_high_mask != 0) {
+    while (finished_count < QTR8RC_NUM_SENSORS) {
         uint32_t elapsed = (uint32_t)(esp_timer_get_time() - start);
 
         if (elapsed >= QTR_TIMEOUT_US) {
@@ -80,14 +123,15 @@ static void qtr_read_raw_impl(uint32_t values[QTR8RC_NUM_SENSORS])
         }
 
         for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
-            uint8_t bit = (uint8_t)(1U << i);
-
-            if ((still_high_mask & bit) && gpio_get_level(s_qtr_pins[i]) == 0) {
+            if (!finished[i] && gpio_get_level(s_qtr_pins[i]) == 0) {
                 values[i] = elapsed;
-                still_high_mask &= (uint8_t)~bit;
+                finished[i] = true;
+                finished_count++;
             }
         }
     }
+
+    xSemaphoreGive(s_hardware_mutex);
 }
 
 static uint16_t normalize_one(int index, uint32_t raw_value)
@@ -144,6 +188,11 @@ static void qtr8rc_read_task(void *arg)
         n++;
         if (n % QTR8RC_LOG_EVERY_N_READS == 0) {
             ESP_LOGI(TAG,
+                     "raw [ %" PRIu32 " %" PRIu32 " %" PRIu32 " %" PRIu32
+                     " | %" PRIu32 " %" PRIu32 " %" PRIu32 " %" PRIu32 " ]",
+                     raw[0], raw[1], raw[2], raw[3],
+                     raw[4], raw[5], raw[6], raw[7]);
+            ESP_LOGI(TAG,
                      "norm [ %u %u %u %u | %u %u %u %u ] linha=%d cal=%d",
                      (unsigned)reading.norm[0],
                      (unsigned)reading.norm[1],
@@ -172,6 +221,14 @@ esp_err_t qtr8rc_init(void)
         return ESP_ERR_NO_MEM;
     }
 
+    s_hardware_mutex = xSemaphoreCreateMutex();
+    if (s_hardware_mutex == NULL) {
+        vSemaphoreDelete(s_reading_mutex);
+        s_reading_mutex = NULL;
+        return ESP_ERR_NO_MEM;
+    }
+
+    /* Configurar pino IR como saída e ligar emissores. */
     gpio_config_t ir_conf = {
         .pin_bit_mask = 1ULL << QTR_IR_PIN,
         .mode = GPIO_MODE_OUTPUT,
@@ -182,19 +239,16 @@ esp_err_t qtr8rc_init(void)
     ESP_ERROR_CHECK(gpio_config(&ir_conf));
     qtr_ir_on();
 
-    uint64_t sensor_mask = 0;
+    /*
+     * Inicializar GPIOs dos sensores com gpio_reset_pin() para
+     * limpar qualquer estado anterior (strapping, boot) e configurar
+     * como entrada flutuante — necessário para leitura RC confiável.
+     */
     for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
-        sensor_mask |= 1ULL << s_qtr_pins[i];
+        gpio_reset_pin(s_qtr_pins[i]);
+        gpio_set_direction(s_qtr_pins[i], GPIO_MODE_INPUT);
+        gpio_set_pull_mode(s_qtr_pins[i], GPIO_FLOATING);
     }
-
-    gpio_config_t sensor_conf = {
-        .pin_bit_mask = sensor_mask,
-        .mode = GPIO_MODE_INPUT,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .intr_type = GPIO_INTR_DISABLE,
-    };
-    ESP_ERROR_CHECK(gpio_config(&sensor_conf));
 
     memset(&s_last_reading, 0, sizeof(s_last_reading));
     for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
@@ -204,7 +258,7 @@ esp_err_t qtr8rc_init(void)
     s_calibrated = false;
 
     ESP_LOGI(TAG,
-             "GPIO IR=%d; D1..D8 = %d,%d,%d,%d,%d,%d,%d,%d (confira conflito com I2C/WiFi)",
+             "GPIO IR=%d; D1..D8 = %d,%d,%d,%d,%d,%d,%d,%d",
              (int)QTR_IR_PIN,
              (int)s_qtr_pins[0],
              (int)s_qtr_pins[1],
@@ -248,8 +302,10 @@ void qtr8rc_calibrate_blocking(uint32_t duration_ms)
     ESP_LOGI(TAG, "Calibração concluída.");
 
     for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
-        ESP_LOGI(TAG, "S%d: min=%" PRIu32 " us max=%" PRIu32 " us", i + 1, s_calib_min[i], s_calib_max[i]);
-        if ((s_calib_max[i] - s_calib_min[i]) < 100) {
+        uint32_t delta = s_calib_max[i] - s_calib_min[i];
+        ESP_LOGI(TAG, "S%d: min=%" PRIu32 " us  max=%" PRIu32 " us  delta=%" PRIu32 " us",
+                 i + 1, s_calib_min[i], s_calib_max[i], delta);
+        if (delta < 100) {
             ESP_LOGW(TAG, "S%d pouca variação — verifique altura, IR e trilha.", i + 1);
         }
     }
@@ -295,8 +351,8 @@ esp_err_t qtr8rc_start_read_task(uint32_t read_period_ms)
 
     s_read_period_ms = read_period_ms ? read_period_ms : 100;
 
-    BaseType_t ok = xTaskCreate(qtr8rc_read_task, "qtr8rc_read", QTR8RC_READ_STACK_WORDS, NULL,
-                              QTR8RC_READ_TASK_PRIO, &s_read_task);
+    BaseType_t ok = xTaskCreatePinnedToCore(qtr8rc_read_task, "qtr8rc_read", QTR8RC_READ_STACK_WORDS, NULL,
+                              QTR8RC_READ_TASK_PRIO, &s_read_task, 0 /* Core 0 — I/O */);
     if (ok != pdPASS) {
         s_read_task = NULL;
         return ESP_ERR_NO_MEM;
