@@ -103,7 +103,7 @@ static void control_loop_task(void *arg) {
                 break;
             }
             case MODE_CALIBRATING:
-                qtr8rc_calibrate_blocking(5000); // 5 seconds calibration
+                qtr8rc_calibrate_blocking(20000); // 20 seconds calibration
                 mode_manager_set_mode(MODE_IDLE);
                 break;
             case MODE_MANUAL:
