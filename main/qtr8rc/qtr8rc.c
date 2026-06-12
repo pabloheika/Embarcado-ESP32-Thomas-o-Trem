@@ -28,7 +28,7 @@ static const char *TAG = "qtr8rc";
 #define QTR_IR_PIN GPIO_NUM_5
 
 static const gpio_num_t s_qtr_pins[QTR8RC_NUM_SENSORS] = {
-    GPIO_NUM_15,  // D1
+    GPIO_NUM_NC,  // D1 (Desativado, era GPIO_NUM_15)
     GPIO_NUM_33,  // D2
     GPIO_NUM_25,  // D3
     GPIO_NUM_26,  // D4
@@ -98,8 +98,10 @@ static void qtr_read_raw_impl(uint32_t values[QTR8RC_NUM_SENSORS])
 
     /* Etapa 1: Carregar capacitores (GPIO como saída em HIGH). */
     for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
-        gpio_set_direction(s_qtr_pins[i], GPIO_MODE_OUTPUT);
-        gpio_set_level(s_qtr_pins[i], 1);
+        if (s_qtr_pins[i] != GPIO_NUM_NC) {
+            gpio_set_direction(s_qtr_pins[i], GPIO_MODE_OUTPUT);
+            gpio_set_level(s_qtr_pins[i], 1);
+        }
     }
 
     esp_rom_delay_us(QTR_CHARGE_TIME_US);
@@ -107,13 +109,19 @@ static void qtr_read_raw_impl(uint32_t values[QTR8RC_NUM_SENSORS])
     /* Etapa 2: Mudar para entrada flutuante e cronometrar descarga. */
     int64_t start = esp_timer_get_time();
 
-    for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
-        gpio_set_direction(s_qtr_pins[i], GPIO_MODE_INPUT);
-        gpio_set_pull_mode(s_qtr_pins[i], GPIO_FLOATING);
-    }
-
     bool finished[QTR8RC_NUM_SENSORS] = { false };
     int finished_count = 0;
+
+    for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
+        if (s_qtr_pins[i] != GPIO_NUM_NC) {
+            gpio_set_direction(s_qtr_pins[i], GPIO_MODE_INPUT);
+            gpio_set_pull_mode(s_qtr_pins[i], GPIO_FLOATING);
+        } else {
+            values[i] = 0;
+            finished[i] = true;
+            finished_count++;
+        }
+    }
 
     while (finished_count < QTR8RC_NUM_SENSORS) {
         uint32_t elapsed = (uint32_t)(esp_timer_get_time() - start);
@@ -245,9 +253,11 @@ esp_err_t qtr8rc_init(void)
      * como entrada flutuante — necessário para leitura RC confiável.
      */
     for (int i = 0; i < QTR8RC_NUM_SENSORS; i++) {
-        gpio_reset_pin(s_qtr_pins[i]);
-        gpio_set_direction(s_qtr_pins[i], GPIO_MODE_INPUT);
-        gpio_set_pull_mode(s_qtr_pins[i], GPIO_FLOATING);
+        if (s_qtr_pins[i] != GPIO_NUM_NC) {
+            gpio_reset_pin(s_qtr_pins[i]);
+            gpio_set_direction(s_qtr_pins[i], GPIO_MODE_INPUT);
+            gpio_set_pull_mode(s_qtr_pins[i], GPIO_FLOATING);
+        }
     }
 
     memset(&s_last_reading, 0, sizeof(s_last_reading));
