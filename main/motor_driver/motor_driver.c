@@ -177,6 +177,7 @@ void motor_right_brake(void) {
 }
 
 void actuator_set(uint8_t duty, bool forward) {
+    ESP_LOGI(TAG, "Atuador acionado: duty=%u, direcao=%s", duty, forward ? "SUBINDO" : "DESCENDO");
     if (forward) {
         set_channel_duty(CH_ACT_R, duty);
         set_channel_duty(CH_ACT_L, 0);
@@ -187,6 +188,7 @@ void actuator_set(uint8_t duty, bool forward) {
 }
 
 void actuator_brake(void) {
+    ESP_LOGI(TAG, "Atuador parado (brake)");
     set_channel_duty(CH_ACT_R, 0);
     set_channel_duty(CH_ACT_L, 0);
 }
