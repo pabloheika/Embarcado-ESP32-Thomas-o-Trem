@@ -11,10 +11,10 @@
 static const char *TAG = "motor";
 
 #define PIN_ENABLE          32
-#define PIN_LEFT_R_PWM      18
-#define PIN_LEFT_L_PWM      19
-#define PIN_RIGHT_R_PWM     17
-#define PIN_RIGHT_L_PWM     16
+#define PIN_LEFT_R_PWM      19
+#define PIN_LEFT_L_PWM      18
+#define PIN_RIGHT_R_PWM     16
+#define PIN_RIGHT_L_PWM     17
 #define PIN_ACT_R_PWM        4
 #define PIN_ACT_L_PWM        2
 
