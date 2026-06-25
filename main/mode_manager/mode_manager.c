@@ -4,7 +4,7 @@
 #include "freertos/task.h"
 #include "sys_logger.h"
 #include "motor_driver.h"
-#include "qtr8rc.h"
+#include "ir_sensor.h"
 #include "line_follower.h"
 
 static const char *TAG = "mode_mgr";
@@ -51,8 +51,8 @@ esp_err_t mode_manager_set_mode(car_mode_t new_mode) {
     }
 
     if (new_mode == MODE_AUTONOMOUS) {
-        if (!qtr8rc_is_calibrated()) {
-            sys_log(SYS_LOG_WARN, TAG, "Sensores não calibrados! Não é possível iniciar autônomo.");
+        if (!ir_sensor_is_calibrated()) {
+            sys_log(SYS_LOG_WARN, TAG, "Sensores não prontos! Não é possível iniciar autônomo.");
             return ESP_ERR_INVALID_STATE;
         }
         pid_reset(&s_state.pid);
@@ -75,8 +75,8 @@ static void control_loop_task(void *arg) {
 
         switch (s_state.mode) {
             case MODE_AUTONOMOUS: {
-                qtr8rc_reading_t reading;
-                if (qtr8rc_get_last_reading(&reading) == ESP_OK) {
+                ir_sensor_reading_t reading;
+                if (ir_sensor_get_last_reading(&reading) == ESP_OK) {
                     line_status_t line = line_follower_compute(&reading);
                     
                     if (line.line_detected) {
@@ -103,7 +103,9 @@ static void control_loop_task(void *arg) {
                 break;
             }
             case MODE_CALIBRATING:
-                qtr8rc_calibrate_blocking(20000); // 20 seconds calibration
+                /* Sensores digitais E18-D80NK não precisam de calibração.
+                 * Apenas retorna ao IDLE imediatamente. */
+                sys_log(SYS_LOG_INFO, TAG, "Sensores digitais não requerem calibração.");
                 mode_manager_set_mode(MODE_IDLE);
                 break;
             case MODE_MANUAL:

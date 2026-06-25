@@ -6,7 +6,7 @@
 #include "sys_logger.h"
 #include "wifi_station.h"
 #include "mpu6050.h"
-#include "qtr8rc.h"
+#include "ir_sensor.h"
 #include "motor_driver.h"
 #include "mode_manager.h"
 #include "web_api.h"
@@ -118,11 +118,10 @@ void app_main(void)
         sys_log(SYS_LOG_ERROR, TAG, "Falha no MPU6050! Fios soltos? Operando sem IMU.");
     }
     
-    if (qtr8rc_init() == ESP_OK) {
-        qtr8rc_set_line_detection(600, 1);
-        ESP_ERROR_CHECK(qtr8rc_start_read_task(50));   // 20 Hz
+    if (ir_sensor_init() == ESP_OK) {
+        ESP_ERROR_CHECK(ir_sensor_start_read_task(50));  // 20 Hz
     } else {
-        sys_log(SYS_LOG_ERROR, TAG, "Falha no QTR-8RC! Fios soltos? Carro cego.");
+        sys_log(SYS_LOG_ERROR, TAG, "Falha nos sensores IR E18-D80NK! Fios soltos? Carro cego.");
     }
     
     // 5. Motores

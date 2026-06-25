@@ -15,7 +15,7 @@
 #include "sys_logger.h"
 #include "mode_manager.h"
 #include "motor_driver.h"
-#include "qtr8rc.h"
+#include "ir_sensor.h"
 #include "mpu6050.h"
 
 static const char *TAG = "web_api";
@@ -161,8 +161,8 @@ static char *build_telemetry_json(void)
     mpu6050_sample_t imu = {0};
     mpu6050_get_last_sample(&imu);
 
-    qtr8rc_reading_t line = {0};
-    qtr8rc_get_last_reading(&line);
+    ir_sensor_reading_t line = {0};
+    ir_sensor_get_last_reading(&line);
 
     car_state_t *state = mode_manager_get_state();
 
@@ -196,12 +196,13 @@ static char *build_telemetry_json(void)
     cJSON_AddNumberToObject(pid_json, "correction", state->pid.last_output);
     cJSON_AddItemToObject(root, "pid", pid_json);
 
-    cJSON *qtr_json = cJSON_CreateObject();
-    cJSON_AddNumberToObject(qtr_json, "black_mask", line.black_mask);
-    cJSON_AddBoolToObject(qtr_json, "line_detected", line.line_detected);
-    cJSON *norm_arr = cJSON_CreateIntArray((const int *)line.norm, 8);
-    cJSON_AddItemToObject(qtr_json, "norm", norm_arr);
-    cJSON_AddItemToObject(root, "qtr8rc", qtr_json);
+    cJSON *ir_json = cJSON_CreateObject();
+    cJSON_AddBoolToObject(ir_json, "left", line.detected[IR_SENSOR_LEFT]);
+    cJSON_AddBoolToObject(ir_json, "center", line.detected[IR_SENSOR_CENTER]);
+    cJSON_AddBoolToObject(ir_json, "right", line.detected[IR_SENSOR_RIGHT]);
+    cJSON_AddNumberToObject(ir_json, "black_mask", line.black_mask);
+    cJSON_AddBoolToObject(ir_json, "line_detected", line.line_detected);
+    cJSON_AddItemToObject(root, "ir_sensors", ir_json);
 
     cJSON *motors_json = cJSON_CreateObject();
     cJSON_AddNumberToObject(motors_json, "left_duty", motor_get_left_duty());

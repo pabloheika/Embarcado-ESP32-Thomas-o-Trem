@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "qtr8rc.h"
+#include "ir_sensor.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,7 +18,7 @@ typedef struct {
 } line_status_t;
 
 void line_follower_init(void);
-line_status_t line_follower_compute(const qtr8rc_reading_t *reading);
+line_status_t line_follower_compute(const ir_sensor_reading_t *reading);
 
 #ifdef __cplusplus
 }

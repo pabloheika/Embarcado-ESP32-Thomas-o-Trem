@@ -8,7 +8,7 @@ void pid_init(pid_state_t *pid, float kp, float ki, float kd) {
     pid->kp = kp;
     pid->ki = ki;
     pid->kd = kd;
-    pid->setpoint = 3500.0f;
+    pid->setpoint = 1000.0f;
     pid->integral = 0.0f;
     pid->prev_error = 0.0f;
     pid->integral_limit = 10000.0f;

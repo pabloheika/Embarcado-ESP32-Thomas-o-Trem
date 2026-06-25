@@ -11,7 +11,7 @@ extern "C" {
 
 typedef enum {
     MODE_IDLE,          // Parado, aguardando comando
-    MODE_CALIBRATING,   // Calibração do QTR-8RC
+    MODE_CALIBRATING,   // Não necessário para sensores digitais E18-D80NK
     MODE_AUTONOMOUS,    // Seguidor de linha com PID
     MODE_MANUAL,        // Controle manual via web
     MODE_EMERGENCY,     // Parada de emergência

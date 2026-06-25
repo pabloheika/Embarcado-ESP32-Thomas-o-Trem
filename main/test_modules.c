@@ -16,7 +16,7 @@ static void test_pid_initialization(void) {
     TEST_ASSERT_EQUAL_FLOAT(0.5f, pid.kp);
     TEST_ASSERT_EQUAL_FLOAT(0.1f, pid.ki);
     TEST_ASSERT_EQUAL_FLOAT(0.2f, pid.kd);
-    TEST_ASSERT_EQUAL_FLOAT(3500.0f, pid.setpoint);
+    TEST_ASSERT_EQUAL_FLOAT(1000.0f, pid.setpoint);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, pid.integral);
     TEST_ASSERT_EQUAL_FLOAT(-255.0f, pid.output_min);
     TEST_ASSERT_EQUAL_FLOAT(255.0f, pid.output_max);
@@ -26,13 +26,13 @@ static void test_pid_compute_positive_error(void) {
     pid_state_t pid;
     pid_init(&pid, 1.0f, 0.0f, 0.0f); // Apenas Proporcional
     
-    // Setpoint 3500, Leitura 3000 -> Erro 500
-    // Kp * Erro = 1.0 * 500 = 500 -> Clamped para 255 (max)
-    float out = pid_compute(&pid, 3000.0f, 0.01f);
+    // Setpoint 1000, Leitura 0 -> Erro 1000
+    // Kp * Erro = 1.0 * 1000 = 1000 -> Clamped para 255 (max)
+    float out = pid_compute(&pid, 0.0f, 0.01f);
     TEST_ASSERT_EQUAL_FLOAT(255.0f, out);
     
-    // Leitura 3400 -> Erro 100 -> Saída 100
-    out = pid_compute(&pid, 3400.0f, 0.01f);
+    // Leitura 900 -> Erro 100 -> Saída 100
+    out = pid_compute(&pid, 900.0f, 0.01f);
     TEST_ASSERT_EQUAL_FLOAT(100.0f, out);
 }
 
@@ -40,8 +40,8 @@ static void test_pid_compute_negative_error(void) {
     pid_state_t pid;
     pid_init(&pid, 1.0f, 0.0f, 0.0f);
     
-    // Setpoint 3500, Leitura 4000 -> Erro -500 -> Clamped para -255 (min)
-    float out = pid_compute(&pid, 4000.0f, 0.01f);
+    // Setpoint 1000, Leitura 2000 -> Erro -1000 -> Clamped para -255 (min)
+    float out = pid_compute(&pid, 2000.0f, 0.01f);
     TEST_ASSERT_EQUAL_FLOAT(-255.0f, out);
 }
 
@@ -53,39 +53,42 @@ static void test_pid_anti_windup(void) {
     // Erro 1000, dt 1s -> integral aumentaria em 1000
     // Mas o limite é 20, então integral fica preso em 20
     // Saída = Ki * integral = 10.0 * 20.0 = 200.0
-    float out = pid_compute(&pid, 2500.0f, 1.0f);
+    float out = pid_compute(&pid, 0.0f, 1.0f);
     TEST_ASSERT_EQUAL_FLOAT(20.0f, pid.integral);
     TEST_ASSERT_EQUAL_FLOAT(200.0f, out);
 }
 
 // ==========================================
-// TESTES DO LINE FOLLOWER
+// TESTES DO LINE FOLLOWER (3 sensores E18-D80NK)
 // ==========================================
 static void test_line_follower_center(void) {
     line_follower_init();
     
-    qtr8rc_reading_t reading = {0};
-    // Simula sensores 3 e 4 (centro) vendo preto perfeitamente
-    reading.norm[3] = 1000;
-    reading.norm[4] = 1000;
+    ir_sensor_reading_t reading = {0};
+    // Simula apenas sensor central detectando a linha
+    reading.detected[IR_SENSOR_CENTER] = true;
+    reading.black_mask = (1 << IR_SENSOR_CENTER);
+    reading.line_detected = true;
     
     line_status_t status = line_follower_compute(&reading);
     
     TEST_ASSERT_TRUE(status.line_detected);
     TEST_ASSERT_FALSE(status.all_white);
     TEST_ASSERT_FALSE(status.all_black);
-    TEST_ASSERT_EQUAL_INT(2, status.black_count);
+    TEST_ASSERT_EQUAL_INT(1, status.black_count);
     
-    // Posição ponderada: (1000*3000 + 1000*4000) / 2000 = 3500
-    TEST_ASSERT_EQUAL_INT16(3500, status.position);
+    // Posição: sensor central → 1000
+    TEST_ASSERT_EQUAL_INT16(1000, status.position);
 }
 
 static void test_line_follower_extreme_left(void) {
     line_follower_init();
     
-    qtr8rc_reading_t reading = {0};
-    // Apenas sensor 0 (extrema esquerda) vê preto
-    reading.norm[0] = 1000;
+    ir_sensor_reading_t reading = {0};
+    // Apenas sensor esquerdo detecta a linha
+    reading.detected[IR_SENSOR_LEFT] = true;
+    reading.black_mask = (1 << IR_SENSOR_LEFT);
+    reading.line_detected = true;
     
     line_status_t status = line_follower_compute(&reading);
     
@@ -96,17 +99,17 @@ static void test_line_follower_extreme_left(void) {
 static void test_line_follower_all_white(void) {
     line_follower_init();
     
-    qtr8rc_reading_t reading = {0};
-    // Todos abaixo do threshold de 600
-    for(int i=0; i<8; i++) reading.norm[i] = 100;
+    ir_sensor_reading_t reading = {0};
+    // Nenhum sensor detecta — tudo branco
+    reading.line_detected = false;
     
     line_status_t status = line_follower_compute(&reading);
     
     TEST_ASSERT_FALSE(status.line_detected);
     TEST_ASSERT_TRUE(status.all_white);
     TEST_ASSERT_EQUAL_INT(0, status.black_count);
-    // Deve manter a ultima posição válida (3500 do init)
-    TEST_ASSERT_EQUAL_INT16(3500, status.position);
+    // Deve manter a última posição válida (1000 do init)
+    TEST_ASSERT_EQUAL_INT16(1000, status.position);
 }
 
 void run_all_unit_tests(void) {
