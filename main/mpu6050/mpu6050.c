@@ -182,8 +182,8 @@ esp_err_t mpu6050_start_read_task(uint32_t read_period_ms)
 
     s_read_period_ms = read_period_ms ? read_period_ms : 20;
 
-    BaseType_t ok = xTaskCreate(mpu6050_read_task, "mpu6050_read", MPU6050_READ_STACK_WORDS, NULL,
-                                MPU6050_READ_TASK_PRIO, &s_read_task);
+    BaseType_t ok = xTaskCreatePinnedToCore(mpu6050_read_task, "mpu6050_read", MPU6050_READ_STACK_WORDS, NULL,
+                                MPU6050_READ_TASK_PRIO, &s_read_task, 0 /* Core 0 — I/O */);
     if (ok != pdPASS) {
         s_read_task = NULL;
         return ESP_ERR_NO_MEM;

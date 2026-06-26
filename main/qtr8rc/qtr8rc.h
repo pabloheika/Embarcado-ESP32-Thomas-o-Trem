@@ -60,6 +60,9 @@ esp_err_t qtr8rc_start_read_task(uint32_t read_period_ms);
 /** Copia a última leitura feita pela tarefa (thread-safe). */
 esp_err_t qtr8rc_get_last_reading(qtr8rc_reading_t *out);
 
+/** Retorna verdadeiro se a calibração já foi feita. */
+bool qtr8rc_is_calibrated(void);
+
 #ifdef __cplusplus
 }
 #endif
