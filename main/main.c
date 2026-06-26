@@ -127,12 +127,15 @@ void app_main(void)
     // 5. Motores
     sys_log(SYS_LOG_INFO, TAG, "Iniciando Motores...");
     ESP_ERROR_CHECK(motor_driver_init());
-    // motor_start_current_monitor(); // <-- DESATIVADO TEMPORARIAMENTE
+    motor_start_current_monitor(); // <-- DESATIVADO TEMPORARIAMENTE
     
     // 6. Gerenciador de modos
     sys_log(SYS_LOG_INFO, TAG, "Iniciando Mode Manager...");
     ESP_ERROR_CHECK(mode_manager_init());
     ESP_ERROR_CHECK(mode_manager_start_control_loop());
+    
+    // Iniciar em modo autônomo ao invés de idle
+    mode_manager_set_mode(MODE_AUTONOMOUS);
     
     // 7. HTTP API
     sys_log(SYS_LOG_INFO, TAG, "Iniciando Web API...");
