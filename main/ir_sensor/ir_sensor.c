@@ -49,7 +49,7 @@ static const bool s_ir_inverted[IR_SENSOR_NUM_SENSORS] = {
 static SemaphoreHandle_t s_reading_mutex = NULL;
 static ir_sensor_reading_t s_last_reading;
 static TaskHandle_t s_read_task = NULL;
-static uint32_t s_read_period_ms = 100;
+static uint32_t s_read_period_ms = 40;
 
 /**
  * Lê os 3 sensores digitais e preenche a struct de leitura.
