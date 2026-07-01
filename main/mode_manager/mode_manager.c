@@ -13,10 +13,10 @@ static car_state_t s_state;
 
 esp_err_t mode_manager_init(void) {
     s_state.mode = MODE_IDLE;
-    s_state.base_speed = 150;
+    s_state.base_speed = 255;
     s_state.motors_enabled = false;
     
-    pid_init(&s_state.pid, 0.2f, 0.0f, 1.0f);
+    pid_init(&s_state.pid, 0.5f, 0.0f, 1.0f);
     line_follower_init();
     
     sys_log(SYS_LOG_INFO, TAG, "Mode manager inicializado");
