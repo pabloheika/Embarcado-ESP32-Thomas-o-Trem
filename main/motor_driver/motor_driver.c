@@ -23,7 +23,7 @@ static const char *TAG = "motor";
 #define ADC_RIGHT_R_IS      ADC_CHANNEL_6   // GPIO34
 #define ADC_RIGHT_L_IS      ADC_CHANNEL_7   // GPIO35
 
-#define PWM_FREQUENCY_HZ    10000
+#define PWM_FREQUENCY_HZ    15000
 #define PWM_RESOLUTION      LEDC_TIMER_8_BIT
 #define LEDC_TIMER          LEDC_TIMER_0
 #define LEDC_MODE           LEDC_LOW_SPEED_MODE
